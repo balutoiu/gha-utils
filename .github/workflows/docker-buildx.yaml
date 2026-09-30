@@ -11,7 +11,7 @@ on:
       registry_owner:
         required: false
         type: string
-        default: ionutbalutoiu
+        default: balutoiu
 
       image_name:
         required: true
