@@ -38,13 +38,18 @@ on:
         type: boolean
         default: true
 
+      runs_on:
+        required: false
+        type: string
+        default: ubuntu-latest
+
     secrets:
       registry_password:
         required: false
 
 jobs:
   docker-buildx:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
 
     steps:
       - name: Checkout
