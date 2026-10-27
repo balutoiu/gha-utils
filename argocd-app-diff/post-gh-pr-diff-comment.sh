@@ -64,10 +64,11 @@ for APP_FILE in $APP_FILES; do
     #
     # Get Argo CD app diff output.
     #
-    # Exit code 20 means a diff was found, anything else non-zero is an error.
+    # Exit code 10 means a diff was found, anything else non-zero is an error.
+    # Not 1 or 20, which the argocd CLI uses for its own errors.
     #
     ${DIR}/show-app-diff.sh $APP_FILE > $DIFF_DIR/argo-app.diff 2>&1 && RC=0 || RC=$?
-    if [[ $RC -ne 0 && $RC -ne 20 ]]; then
+    if [[ $RC -ne 0 && $RC -ne 10 ]]; then
         echo "::error file=${APP_FILE}::Argo CD app diff failed (exit code ${RC})"
         cat $DIFF_DIR/argo-app.diff
         FAILED_APP_FILES+=("$APP_FILE")

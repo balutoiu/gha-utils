@@ -30,7 +30,7 @@ function git_repo_revision() {
 
 ARGO_APP_FILE="$1"
 ARGO_APP_NAME=$(cat $ARGO_APP_FILE | yq '.metadata.name')
-ARGOCD_APP_DIFF_CMD="argocd app diff --hard-refresh --diff-exit-code 20 $ARGOCD_EXTRA_OPTS $ARGO_APP_NAME"
+ARGOCD_APP_DIFF_CMD="argocd app diff --hard-refresh --diff-exit-code 10 $ARGOCD_EXTRA_OPTS $ARGO_APP_NAME"
 
 IS_MULTI_SOURCES_APP=$(cat $ARGO_APP_FILE | yq '.spec | has("sources")')
 if [[ "$IS_MULTI_SOURCES_APP" = "true" ]]; then
