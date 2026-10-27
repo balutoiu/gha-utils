@@ -1,0 +1,98 @@
+name: Argo CD App Diff
+description: >-
+  Diff the Argo CD apps a pull request touches against their live state and
+  post the output as PR comments. It expects a checkout of the repo under
+  review, with apps in argo-cd/apps/<cluster>/<app>.yaml, values in
+  argo-cd/helm_values/<cluster>/<app>/ and extras in argo-cd/extras/<cluster>/<app>/.
+
+inputs:
+  clusters:
+    description: >-
+      YAML list of Argo CD instances to diff against. Each entry has a name,
+      a server and a password. The name is the Argo CD context and must
+      match a cluster dir under argo-cd/apps/. username defaults to admin
+      and plaintext to false. Apps of clusters not in the list are skipped.
+    required: true
+
+  pr_number:
+    description: Pull request to diff and comment on.
+    required: false
+    default: ${{ github.event.pull_request.number }}
+
+  github_token:
+    description: Token used to read the pull request and post comments.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install prerequisites
+      shell: bash
+      env:
+        # renovate: datasource=github-releases depName=argocd-cli packageName=argoproj/argo-cd
+        ARGOCD_VERSION: v3.5.6
+        # renovate: datasource=github-releases depName=gh packageName=cli/cli
+        GH_VERSION: v2.103.3
+        # renovate: datasource=github-releases depName=yq packageName=mikefarah/yq
+        YQ_VERSION: v4.54.1
+      run: |
+        set -eo pipefail
+
+        case "$RUNNER_ARCH" in
+          X64) ARCH=amd64 ;;
+          ARM64) ARCH=arm64 ;;
+          *) echo "::error::Unsupported runner architecture: $RUNNER_ARCH"; exit 1 ;;
+        esac
+
+        BIN_DIR="$RUNNER_TEMP/argocd-app-diff/bin"
+        mkdir -p "$BIN_DIR"
+
+        curl -fsSL --retry 3 -o "$BIN_DIR/argocd" "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${ARCH}"
+
+        curl -fsSL --retry 3 "https://github.com/cli/cli/releases/download/${GH_VERSION}/gh_${GH_VERSION#v}_linux_${ARCH}.tar.gz" \
+          | tar -xzf - -C "$BIN_DIR" --strip-components 2 "gh_${GH_VERSION#v}_linux_${ARCH}/bin/gh"
+
+        curl -fsSL --retry 3 -o "$BIN_DIR/yq" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}"
+
+        chmod +x "$BIN_DIR"/*
+        echo "$BIN_DIR" >> "$GITHUB_PATH"
+
+    - name: Login to Argo CD
+      id: login
+      shell: bash
+      env:
+        CLUSTERS: ${{ inputs.clusters }}
+      run: |
+        set -eo pipefail
+
+        NAMES=()
+        COUNT=$(yq -e 'length' <<< "$CLUSTERS")
+        for ((i = 0; i < COUNT; i++)); do
+          NAME=$(yq -e ".[$i].name" <<< "$CLUSTERS")
+          SERVER=$(yq -e ".[$i].server" <<< "$CLUSTERS")
+          PASSWORD=$(yq -e ".[$i].password" <<< "$CLUSTERS")
+          USERNAME=$(yq ".[$i].username // \"admin\"" <<< "$CLUSTERS")
+          echo "::add-mask::$PASSWORD"
+
+          FLAGS=(--grpc-web)
+          if [[ "$(yq ".[$i].plaintext // false" <<< "$CLUSTERS")" = "true" ]]; then
+            FLAGS+=(--plaintext)
+          fi
+
+          argocd login "${FLAGS[@]}" --name "$NAME" "$SERVER" --username "$USERNAME" --password "$PASSWORD"
+          NAMES+=("$NAME")
+        done
+
+        echo "clusters=${NAMES[*]}" >> "$GITHUB_OUTPUT"
+
+    - name: Diff Argo CD apps
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+        ARGOCD_APP_DIFF_CLUSTERS: ${{ steps.login.outputs.clusters }}
+      run: |
+        set -eo pipefail
+        "$GITHUB_ACTION_PATH/post-gh-pr-diff-comment.sh" "$PR_NUMBER"
