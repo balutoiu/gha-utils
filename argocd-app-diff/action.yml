@@ -8,10 +8,10 @@ description: >-
 inputs:
   clusters:
     description: >-
-      YAML list of Argo CD instances to diff against, one per cluster dir
-      under argo-cd/apps/. Fields: name (Argo CD context, must match the
-      cluster dir), server, password, username (default admin) and
-      plaintext (default false). Apps of clusters not listed are skipped.
+      YAML list of Argo CD instances to diff against. Each entry has a name,
+      a server and a password. The name is the Argo CD context and must
+      match a cluster dir under argo-cd/apps/. username defaults to admin
+      and plaintext to false. Apps of clusters not in the list are skipped.
     required: true
 
   pr_number:
