@@ -1,8 +1,8 @@
 name: Argo CD App Diff
 description: >-
   Diff the Argo CD apps a pull request touches against their live state and
-  post the output as PR comments. Expects the repo under review checked out,
-  with apps in argo-cd/apps/<cluster>/<app>.yaml, values in
+  post the output as PR comments. It expects a checkout of the repo under
+  review, with apps in argo-cd/apps/<cluster>/<app>.yaml, values in
   argo-cd/helm_values/<cluster>/<app>/ and extras in argo-cd/extras/<cluster>/<app>/.
 
 inputs:
