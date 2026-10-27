@@ -43,6 +43,24 @@ on:
         type: string
         default: ubuntu-latest
 
+      keep_images:
+        description: The newest images of any tag that the registry cleanup keeps
+        required: false
+        type: number
+        default: 3
+
+      keep_releases:
+        description: The newest images with a release tag that the registry cleanup keeps
+        required: false
+        type: number
+        default: 3
+
+      release_tags:
+        description: The regex of a release tag
+        required: false
+        type: string
+        default: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
+
     secrets:
       registry_password:
         required: false
@@ -100,9 +118,46 @@ jobs:
           push: ${{ inputs.push }}
 
       - name: Cleanup registry
-        # v5.0.0; SHA: gh api repos/actions/delete-package-versions/commits/v5.0.0 --jq .sha
-        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55
+        # A multi-arch build pushes an index, one untagged image per platform and one untagged attestation per
+        # platform, all versions of the package. Pruning by version count deletes the tags the clusters run, and
+        # pruning untagged versions breaks every multi-arch tag, so this keeps whole images, children included.
+        if: ${{ inputs.push }}
+        # v9.0.0; SHA: gh api repos/actions/github-script/commits/v9.0.0 --jq .sha
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          OWNER: ${{ inputs.registry_owner }}
+          IMAGE: ${{ inputs.image_name }}
+          KEEP_IMAGES: ${{ inputs.keep_images }}
+          KEEP_RELEASES: ${{ inputs.keep_releases }}
+          RELEASE_TAGS: ${{ inputs.release_tags }}
         with:
-          package-name: ${{ inputs.image_name }}
-          package-type: container
-          min-versions-to-keep: 5
+          script: |
+            const {REGISTRY, OWNER, IMAGE} = process.env
+            const pkg = {package_type: 'container', package_name: IMAGE, username: OWNER}
+            const versions = await github.paginate(github.rest.packages.getAllPackageVersionsForPackageOwnedByUser, {...pkg, per_page: 100})
+            const tags = v => v.metadata?.container?.tags ?? []
+            const release = new RegExp(process.env.RELEASE_TAGS)
+            const tagged = versions.filter(v => tags(v).length > 0).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+            const roots = new Set([
+              ...tagged.slice(0, Number(process.env.KEEP_IMAGES)),
+              ...tagged.filter(v => tags(v).some(t => release.test(t))).slice(0, Number(process.env.KEEP_RELEASES)),
+            ])
+            const keep = new Set()
+            for (const v of roots) {
+              keep.add(v.name)
+              const ref = `${REGISTRY}/${OWNER}/${IMAGE}@${v.name}`
+              const out = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', '--raw', ref], {ignoreReturnCode: true, silent: true})
+              if (out.exitCode !== 0) {
+                core.warning(`Cleanup skipped: can't read ${ref} (${tags(v).join(', ')}): ${out.stderr.trim()}`)
+                return
+              }
+              for (const m of JSON.parse(out.stdout).manifests ?? []) keep.add(m.digest)
+              core.info(`keep ${tags(v).join(', ')}`)
+            }
+            // A build running beside this one has pushed its platform images but maybe not yet its tagged index.
+            const settled = Date.now() - 60 * 60 * 1000
+            for (const v of versions.filter(v => !keep.has(v.name) && Date.parse(v.created_at) < settled)) {
+              core.info(`delete ${v.name} ${tags(v).join(', ') || '(untagged)'} from ${v.created_at}`)
+              await github.rest.packages.deletePackageVersionForUser({...pkg, package_version_id: v.id})
+            }
