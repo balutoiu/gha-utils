@@ -31,7 +31,7 @@ runs:
       shell: bash
       env:
         # renovate: datasource=github-releases depName=argocd-cli packageName=argoproj/argo-cd
-        ARGOCD_VERSION: v3.5.6
+        ARGOCD_VERSION: v3.6.1
         # renovate: datasource=github-releases depName=gh packageName=cli/cli
         GH_VERSION: v2.103.3
         # renovate: datasource=github-releases depName=yq packageName=mikefarah/yq
