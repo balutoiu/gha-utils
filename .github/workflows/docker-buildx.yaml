@@ -98,4 +98,5 @@ jobs:
         with:
           package-name: ${{ inputs.image_name }}
           package-type: container
-          min-versions-to-keep: 5
+          # Ten images of two platforms: each is 5 versions, its index and a manifest and an attestation per platform.
+          min-versions-to-keep: 50
