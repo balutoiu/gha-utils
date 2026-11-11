@@ -2,7 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    "customManagers:githubActionsVersions",
-    ":disableRateLimiting"
+    "customManagers:githubActionsVersions"
+  ],
+  "labels": [
+    "ready-for-agent-review"
   ]
 }
