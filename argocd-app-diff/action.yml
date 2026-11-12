@@ -33,7 +33,7 @@ runs:
         # renovate: datasource=github-releases depName=argocd-cli packageName=argoproj/argo-cd
         ARGOCD_VERSION: v3.6.1
         # renovate: datasource=github-releases depName=gh packageName=cli/cli
-        GH_VERSION: v2.103.3
+        GH_VERSION: v2.104.0
         # renovate: datasource=github-releases depName=yq packageName=mikefarah/yq
         YQ_VERSION: v4.54.3
       run: |
