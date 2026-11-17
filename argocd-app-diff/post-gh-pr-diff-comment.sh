@@ -68,7 +68,14 @@ for APP_FILE in $APP_FILES; do
     # Not 1 or 20, which the argocd CLI uses for its own errors.
     #
     ${DIR}/show-app-diff.sh $APP_FILE > $DIFF_DIR/argo-app.diff 2>&1 && RC=0 || RC=$?
-    if [[ $RC -ne 0 && $RC -ne 10 ]]; then
+    NOTE=""
+    if [[ $RC -eq 0 ]]; then
+        # Say so, or an empty diff reads the same as a run that printed nothing.
+        TITLE="Argo CD App Diff"
+        NOTE=":white_check_mark: No changes: the rendered manifests match the live state on \`${CLUSTER_NAME}\`."
+        SUMMARY=":open_file_folder: Show Output"
+        FENCE_LANG="text"
+    elif [[ $RC -ne 10 ]]; then
         echo "::error file=${APP_FILE}::Argo CD app diff failed (exit code ${RC})"
         cat $DIFF_DIR/argo-app.diff
         FAILED_APP_FILES+=("$APP_FILE")
@@ -95,7 +102,14 @@ for APP_FILE in $APP_FILES; do
     for PART_FILE in $DIFF_DIR/*.diff; do
         echo "## ${TITLE}" > $DIFF_COMMENT_FILE
         echo "### (${PART_COUNT}/${TOTAL_PARTS}) \`${APP_FILE}\`" >> $DIFF_COMMENT_FILE
-        argocd_app_diff_markdown $PART_FILE "$SUMMARY" $FENCE_LANG >> $DIFF_COMMENT_FILE
+        if [[ -n "$NOTE" ]]; then
+            echo "" >> $DIFF_COMMENT_FILE
+            echo "$NOTE" >> $DIFF_COMMENT_FILE
+        fi
+        # Skip the output block when there is no output, such as a diff with no changes.
+        if grep -q '[^[:space:]]' $PART_FILE; then
+            argocd_app_diff_markdown $PART_FILE "$SUMMARY" $FENCE_LANG >> $DIFF_COMMENT_FILE
+        fi
         gh pr comment $PR_NUMBER -F $DIFF_COMMENT_FILE
         PART_COUNT=$(($PART_COUNT + 1))
     done
